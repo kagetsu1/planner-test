@@ -1,0 +1,37 @@
+{
+  "configurations" : [
+    {
+      "id" : "3CAA21AC-E171-49B1-BAA6-EDAEBB80ACA8",
+      "name" : "Test Scheme Action",
+      "options" : {
+
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "targetForVariableExpansion" : {
+      "containerPath" : "container:Planora.xcodeproj",
+      "identifier" : "4030ADA02E6255190085087B",
+      "name" : "Planora"
+    }
+  },
+  "testTargets" : [
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Planora.xcodeproj",
+        "identifier" : "4030ADB22E6255200085087B",
+        "name" : "PlanoraTests"
+      }
+    },
+    {
+      "parallelizable" : true,
+      "target" : {
+        "containerPath" : "container:Planora.xcodeproj",
+        "identifier" : "4030ADBC2E6255200085087B",
+        "name" : "PlanoraUITests"
+      }
+    }
+  ],
+  "version" : 1
+}
