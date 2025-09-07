@@ -48,9 +48,30 @@ struct AuthUser: Codable, Equatable {
 final class AuthenticationService: NSObject, ObservableObject {
     static let shared = AuthenticationService()
     
-    @Published private(set) var currentUser: AuthUser?
+    @Published var currentUser: AuthUser?
     @Published var errorMessage: String?
     private var currentNonce: String?
+    
+    override init() {
+        super.init()
+        loadSavedUser()
+    }
+    
+    private func loadSavedUser() {
+        if let userData = UserDefaults.standard.data(forKey: "currentUser"),
+           let user = try? JSONDecoder().decode(AuthUser.self, from: userData) {
+            currentUser = user
+        }
+    }
+    
+    private func saveUser(_ user: AuthUser?) {
+        if let user = user,
+           let userData = try? JSONEncoder().encode(user) {
+            UserDefaults.standard.set(userData, forKey: "currentUser")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "currentUser")
+        }
+    }
 
     // MARK: - Apple
     func startSignInWithApple() {
@@ -88,10 +109,13 @@ final class AuthenticationService: NSObject, ObservableObject {
 
     func signInAsGuest() {
         currentUser = AuthUser(id: UUID().uuidString, name: "Guest", email: nil, provider: .guest)
+        saveUser(currentUser)
     }
 
     func signOut() {
         currentUser = nil
+        saveUser(nil)
+        errorMessage = nil
         #if canImport(GoogleSignIn)
         GIDSignIn.sharedInstance.signOut()
         #endif
@@ -134,12 +158,18 @@ extension AuthenticationService: ASAuthorizationControllerDelegate {
             let fullName = credentials.fullName?.formatted()
             let email = credentials.email
             let user = AuthUser(id: userID, name: fullName, email: email, provider: .apple)
-            DispatchQueue.main.async { self.currentUser = user }
+            DispatchQueue.main.async { 
+                self.currentUser = user
+                self.saveUser(user)
+                self.errorMessage = nil
+            }
         }
     }
 
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        print("Sign in with Apple failed: \(error.localizedDescription)")
+        DispatchQueue.main.async {
+            self.errorMessage = error.localizedDescription
+        }
     }
 }
 

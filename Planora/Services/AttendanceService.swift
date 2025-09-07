@@ -3,14 +3,20 @@ import CoreData
 import AVFoundation
 
 /// Service for managing attendance sessions and check-ins
-@MainActor
 class AttendanceService: ObservableObject {
     @Published var isScanning = false
     @Published var currentSession: AttendanceSession?
     
-    private let moodleService = MoodleService()
+    private var moodleService: MoodleService?
     private var ctx: NSManagedObjectContext {
         DataController.shared.container.viewContext
+    }
+    
+    init() {
+        // Initialize moodle service lazily to avoid crashes
+        DispatchQueue.main.async {
+            self.moodleService = MoodleService()
+        }
     }
     
     /// Get attendance sessions for today that are within check-in window
@@ -77,6 +83,10 @@ class AttendanceService: ObservableObject {
             throw AttendanceError.sessionClosed
         }
         
+        guard let moodleService = moodleService else {
+            throw AttendanceError.networkError(NSError(domain: "AttendanceService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Moodle service not available"]))
+        }
+        
         // Default status ID for "Present" - this may vary by Moodle instance
         let statusId = 1
         
@@ -88,9 +98,9 @@ class AttendanceService: ObservableObject {
         
         if success {
             // Update local status
-            await MainActor.run {
+            DispatchQueue.main.async {
                 session.status = "Present"
-                try? ctx.save()
+                try? self.ctx.save()
             }
         }
         

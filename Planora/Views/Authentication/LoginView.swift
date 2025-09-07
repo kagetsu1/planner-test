@@ -5,9 +5,9 @@ struct LoginView: View {
     @StateObject private var authService = AuthenticationService.shared
     @StateObject private var backupService = BackupService.shared
     @State private var showingError = false
+    @State private var isLoading = false
     
     var body: some View {
-        NavigationView {
             ZStack {
                 // Background gradient
                 LinearGradient(
@@ -76,11 +76,16 @@ struct LoginView: View {
                         .signInWithAppleButtonStyle(.black)
                         .frame(height: 50)
                         .cornerRadius(12)
+                        .disabled(isLoading)
                         
                         // Google Sign In (Placeholder)
                         Button(action: {
-                            // TODO: Implement Google sign in
-                            // authService.startSignInWithGoogle(presenting: UIApplication.shared.windows.first?.rootViewController ?? UIViewController())
+                            isLoading = true
+                            // Simulate Google sign in for now
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                                authService.signInAsGuest()
+                                isLoading = false
+                            }
                         }) {
                             HStack(spacing: 12) {
                                 Image(systemName: "globe")
@@ -96,30 +101,31 @@ struct LoginView: View {
                             .background(Color.blue)
                             .cornerRadius(12)
                         }
-                        .disabled(false)
+                        .disabled(isLoading)
                         
                         // Guest Mode
                         Button(action: {
-                            // Enable guest mode
+                            isLoading = true
                             authService.signInAsGuest()
+                            isLoading = false
                         }) {
                             Text("Continue as Guest")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
                         .padding(.top, 8)
+                        .disabled(isLoading)
                     }
                     .padding(.horizontal, 40)
                     
                     // Loading indicator
-                    if false { // TODO: Add loading state
+                    if isLoading {
                         ProgressView()
                             .scaleEffect(1.2)
                             .padding(.top, 20)
                     }
                     
                     // Error message
-                    // TODO: Add error handling
                     if let errorMessage = authService.errorMessage {
                         Text(errorMessage)
                             .font(.caption)
@@ -158,26 +164,35 @@ struct LoginView: View {
                     .padding(.bottom, 20)
                 }
             }
-        }
         .alert("Sign In Error", isPresented: $showingError) {
             Button("OK") { }
         } message: {
-            Text("An unknown error occurred")
+            Text(authService.errorMessage ?? "An unknown error occurred")
         }
-        .onChange(of: false) { error in // TODO: Add error handling
-            showingError = false
+        .onChange(of: authService.errorMessage) { error in
+            showingError = error != nil
         }
     }
     
     private func handleSignInResult(_ result: Result<ASAuthorization, Error>) {
+        isLoading = true
+        
         switch result {
         case .success(let authorization):
-            if authorization.credential is ASAuthorizationAppleIDCredential {
-                // Handle successful Apple sign in
+            if let credential = authorization.credential as? ASAuthorizationAppleIDCredential {
+                let user = AuthUser(
+                    id: credential.user,
+                    name: credential.fullName?.formatted(),
+                    email: credential.email,
+                    provider: .apple
+                )
+                authService.currentUser = user
                 print("Apple Sign In successful")
             }
+            isLoading = false
         case .failure(let error):
             authService.errorMessage = error.localizedDescription
+            isLoading = false
         }
     }
 }

@@ -4,16 +4,18 @@ import SwiftUI
 struct QuickAddBar: View {
     @State private var inputText = ""
     @State private var isProcessing = false
-    @State private var showingResults = false
-    @State private var parsedItem: ParsedItem?
     @State private var errorMessage: String?
     
     @FocusState private var isTextFieldFocused: Bool
     
-    private let quickAddParser = QuickAddParser()
+    @State private var quickAddParser: QuickAddParser?
     private let hapticFeedback = UIImpactFeedbackGenerator(style: .light)
     
     var onItemCreated: ((ParsedItem) -> Void)?
+    
+    init(onItemCreated: ((ParsedItem) -> Void)? = nil) {
+        self.onItemCreated = onItemCreated
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -65,6 +67,11 @@ struct QuickAddBar: View {
         }
         .animation(UITheme.Animation.standard, value: isTextFieldFocused)
         .animation(UITheme.Animation.standard, value: errorMessage)
+        .onAppear {
+            if quickAddParser == nil {
+                quickAddParser = QuickAddParser()
+            }
+        }
     }
     
     private var suggestionHints: some View {
@@ -130,6 +137,7 @@ struct QuickAddBar: View {
     
     private func processInput() {
         guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let parser = quickAddParser else { return }
         
         isProcessing = true
         hapticFeedback.impactOccurred()
@@ -140,15 +148,15 @@ struct QuickAddBar: View {
                     _Concurrency.Task {
             do {
                 // Parse the input
-                guard let parsed = quickAddParser.parse(inputText) else {
+                guard let parsed = parser.parse(inputText) else {
                     throw QuickAddError.parsingFailed
                 }
                 
                 // Create the item
                 if parsed.type == .task {
-                    _ = try quickAddParser.createTask(from: parsed)
+                    _ = try parser.createTask(from: parsed)
                 } else {
-                    _ = try quickAddParser.createEvent(from: parsed, useEventKit: true)
+                    _ = try parser.createEvent(from: parsed, useEventKit: false) // Use Core Data for now
                 }
                 
                 await MainActor.run {

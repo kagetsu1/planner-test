@@ -5,17 +5,26 @@ class DataController: ObservableObject {
     static let shared = DataController()
     let container: NSPersistentContainer
     
-    init() {
+    private init() {
         container = NSPersistentContainer(name: "StudentPlanner")
         
+        // Configure store location for App Group sharing
+        if let storeURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.planora.app")?.appendingPathComponent("StudentPlanner.sqlite") {
+            let description = NSPersistentStoreDescription(url: storeURL)
+            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+            container.persistentStoreDescriptions = [description]
+        }
+        
         // Configure for lightweight migration
-        let description = container.persistentStoreDescriptions.first
-        description?.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
-        description?.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+        for description in container.persistentStoreDescriptions {
+            description.setOption(true as NSNumber, forKey: NSMigratePersistentStoresAutomaticallyOption)
+            description.setOption(true as NSNumber, forKey: NSInferMappingModelAutomaticallyOption)
+        }
         
         container.loadPersistentStores { description, error in
             if let error = error {
-                print("Core Data failed to load: \(error.localizedDescription)")
+                fatalError("Core Data failed to load: \(error.localizedDescription)")
             }
         }
         
@@ -25,11 +34,36 @@ class DataController: ObservableObject {
     }
     
     func save() {
-        if container.viewContext.hasChanges {
-            do {
-                try container.viewContext.save()
-            } catch {
-                print("Error saving context: \(error)")
+        let context = container.viewContext
+        
+        guard context.hasChanges else { return }
+        
+        do {
+            try context.save()
+        } catch {
+            // Handle save error gracefully
+            print("Failed to save context: \(error)")
+            
+            // Rollback changes
+            context.rollback()
+            
+            // Post notification for error handling
+            NotificationCenter.default.post(
+                name: .coreDataSaveError,
+                object: error
+            )
+        }
+    }
+    
+    func performBackgroundTask<T>(_ block: @escaping (NSManagedObjectContext) throws -> T) async throws -> T {
+        return try await withCheckedThrowingContinuation { continuation in
+            container.performBackgroundTask { context in
+                do {
+                    let result = try block(context)
+                    continuation.resume(returning: result)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
             }
         }
     }
@@ -38,4 +72,9 @@ class DataController: ObservableObject {
         container.viewContext.delete(object)
         save()
     }
+}
+
+// MARK: - Notification Extensions
+extension Notification.Name {
+    static let coreDataSaveError = Notification.Name("coreDataSaveError")
 }
